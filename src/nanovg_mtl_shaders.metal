@@ -174,6 +174,7 @@ fragment float4 fragmentShaderStencilStrokesAA(
     constant Uniforms& uniforms [[buffer(0)]],
     texture2d<float> texture [[texture(0)]],
     sampler sampler [[sampler(0)]]) {
+
   float scissor = scissorMask(uniforms, in.fpos);
   if (scissor == 0)
     return float4(0);
@@ -190,7 +191,7 @@ fragment float4 fragmentShaderStencilStrokesAA(
 
   float strokeAlpha = strokeMask(uniforms, in.ftcoord);
   if (strokeAlpha < uniforms.strokeThr) {
-    discard_fragment();
+      return float(0);
   }
 
   if (uniforms.type == 0) {  // MNVG_SHADER_FILLGRAD

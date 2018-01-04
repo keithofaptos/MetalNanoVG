@@ -36,21 +36,6 @@
 
 #include "nanovg.h"
 
-#if TARGET_OS_IOS == 1
-#  include "mnvg_bitcode/ios_1_0.h"
-#  include "mnvg_bitcode/ios_1_1.h"
-#  include "mnvg_bitcode/ios_1_2.h"
-#  include "mnvg_bitcode/ios_2_0.h"
-#elif TARGET_OS_TV == 1
-#  include "mnvg_bitcode/tvos.h"
-#elif TARGET_OS_OSX == 1
-#  include "mnvg_bitcode/osx_1_1.h"
-#  include "mnvg_bitcode/osx_1_2.h"
-#  include "mnvg_bitcode/osx_2_0.h"
-#else
-#  define MNVG_INVALID_TARGET
-#endif
-
 typedef enum MNVGvertexInputIndex {
   MNVG_VERTEX_INPUT_INDEX_VERTICES = 0,
   MNVG_VERTEX_INPUT_INDEX_VIEW_SIZE = 1,
@@ -862,71 +847,9 @@ static int mtlnvg__renderCreate(void* uptr) {
   }
   mtl->metalLayer.pixelFormat = MTLPixelFormatBGRA8Unorm;
 
-  // Loads shaders from pre-compiled metal library..
-  NSError* error;
+  // load shaders
   id<MTLDevice> device = mtl->metalLayer.device;
-#ifdef MNVG_INVALID_TARGET
-  id<MTLLibrary> library = nil;
-  return 0;
-#endif
-
-  bool creates_pseudo_texture = false;
-  unsigned char* metal_library_bitcode;
-  unsigned int metal_library_bitcode_len;
-  NSOperatingSystemVersion os_version = [[NSProcessInfo processInfo]
-      operatingSystemVersion];
-#if TARGET_OS_IOS == 1
-  if (os_version.majorVersion < 8) {
-    return 0;
-  } else if (os_version.majorVersion == 8) {
-    creates_pseudo_texture = true;
-    metal_library_bitcode = mnvg_bitcode_ios_1_0;
-    metal_library_bitcode_len = mnvg_bitcode_ios_1_0_len;
-  } else if (os_version.majorVersion == 9) {
-    creates_pseudo_texture = true;
-    metal_library_bitcode = mnvg_bitcode_ios_1_1;
-    metal_library_bitcode_len = mnvg_bitcode_ios_1_1_len;
-  } else if (os_version.majorVersion == 10) {
-    metal_library_bitcode = mnvg_bitcode_ios_1_2;
-    metal_library_bitcode_len = mnvg_bitcode_ios_1_2_len;
-  } else {
-    metal_library_bitcode = mnvg_bitcode_ios_2_0;
-    metal_library_bitcode_len = mnvg_bitcode_ios_2_0_len;
-  }
-#elif TARGET_OS_TV == 1
-  metal_library_bitcode = mnvg_bitcode_tvos;
-  metal_library_bitcode_len = mnvg_bitcode_tvos_len;
-#elif TARGET_OS_OSX == 1
-  if (os_version.majorVersion < 10) {
-    return 0;
-  }
-  if (os_version.majorVersion == 10 && os_version.minorVersion < 11) {
-    return 0;
-  }
-  if (os_version.minorVersion == 11) {
-    metal_library_bitcode = mnvg_bitcode_osx_1_1;
-    metal_library_bitcode_len = mnvg_bitcode_osx_1_1_len;
-  } else if (os_version.minorVersion == 12) {
-    metal_library_bitcode = mnvg_bitcode_osx_1_2;
-    metal_library_bitcode_len = mnvg_bitcode_osx_1_2_len;
-  } else {
-    metal_library_bitcode = mnvg_bitcode_osx_2_0;
-    metal_library_bitcode_len = mnvg_bitcode_osx_2_0_len;
-  }
-  creates_pseudo_texture = true;
-#endif
-
-  dispatch_data_t data = dispatch_data_create(metal_library_bitcode,
-                                              metal_library_bitcode_len,
-                                              NULL,
-                                              DISPATCH_DATA_DESTRUCTOR_DEFAULT);
-  id<MTLLibrary> library = [device newLibraryWithData:data error:&error];
-  [data release];
-
-  mtlnvg__checkError(mtl, "init library", error);
-  if (library == nil) {
-    return 0;
-  }
+  id<MTLLibrary> library = [device newDefaultLibrary];
 
   mtl->vertexFunction = [library newFunctionWithName:@"vertexShader"];
   if (mtl->flags & NVG_ANTIALIAS) {
@@ -979,12 +902,10 @@ static int mtlnvg__renderCreate(void* uptr) {
   [samplerDescriptor release];
 
   // Initializes pseudo texture for macOS.
-  if (creates_pseudo_texture) {
-    const int kPseudoTextureImage = mtlnvg__renderCreateTexture(
+  const int kPseudoTextureImage = mtlnvg__renderCreateTexture(
         mtl, NVG_TEXTURE_ALPHA, 1, 1, 0, NULL);
-    MNVGtexture* tex = mtlnvg__findTexture(mtl, kPseudoTextureImage);
-    mtl->pseudoTexture = tex->tex;
-  }
+  MNVGtexture* tex = mtlnvg__findTexture(mtl, kPseudoTextureImage);
+  mtl->pseudoTexture = tex->tex;
 
   // Initializes default blend states.
   mtl->blendFunc.srcRGB = MTLBlendFactorOne;
